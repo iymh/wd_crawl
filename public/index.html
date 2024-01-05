@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebCrawl for Watson Discovery</title>
+  <style>
+    [v-cloak] {
+      display: none;
+    }
+    .wdt2 {
+      width: 2rem;
+    }
+    .wdt5 {
+      width: 5rem;
+    }
+    .wdt10 {
+      width: 10rem;
+    }
+    .wdt12 {
+      width: 12rem;
+    }
+
+    /* for highlight in discovery result. */
+    em {
+      font-weight: bold;
+      color: red;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" v-cloak>
+    <v-app>
+      <v-app-bar app>
+        <v-app-bar-title>WebCrawl for Watson Discovery</v-app-bar-title>
+        <v-spacer></v-spacer>
+      </v-app-bar>
+
+      <!-- Toast Component -->
+      <v-snackbar
+        v-model="toast.show"
+        bottom
+        multi-line
+        :timeout="toast.timeout"
+        :color="toast.type"
+        @click="toast.show = false">
+        <div class="rw">{{ toast.text }}</div>
+      </v-snackbar>
+
+      <!-- Add File Dialog -->
+      <v-dialog v-model="dc_addfile.dialog" width="80%" persistent>
+        <v-card>
+          <v-card-title>
+            <span class="headline">Confirmation</span>
+          </v-card-title>
+
+          <v-card-text>
+            <v-container>
+              <div class="text-h5 primary--text">Add a Document?</div>
+              <v-radio-group v-model="dc_addfile.filetype" row>
+                <v-radio label="text" value="text"></v-radio>
+                <v-radio label="html" value="html"></v-radio>
+              </v-radio-group>
+            </v-container>
+          </v-card-text>
+
+          <v-card-actions>
+            <v-btn @click="dc_addfile.dialog=false">Cancel</v-btn>
+            <v-spacer></v-spacer>
+            <v-btn
+              color="primary"
+              elevation="1"
+              :loading="dc_addfile.loading"
+              @click="addDocument()">
+              <v-icon left>mdi-send</v-icon>
+              <span>Send File</span>
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <v-main>
+        <v-container>
+
+          <v-divider></v-divider>
+          <div class="ma-2">
+            <!-- <v-row class="justify-center align-center ma-3">
+              <v-textarea
+                v-model="cwl_urllists"
+                label="URL List"
+                style="white-space: pre-line;"
+                outlined
+                rows="5"
+              ></v-textarea>
+            </v-row> -->
+
+            <v-row class="justify-center align-center ma-3">
+              <v-combobox
+                class="flex-grow-1 ma_lr_1rem ma_tp_05rem"
+                v-model="cwl_url"
+                :items="cwl_url_items"
+                label="Crawl URL"
+                outlined
+                clearable
+                counter
+                dense
+                rows="1"
+              ></v-combobox>
+            </v-row>
+
+            <v-row class="justify-center align-center ma-3">
+              <v-combobox
+                class="flex-grow-1 ma_lr_1rem ma_tp_05rem"
+                v-model="cwl_selector"
+                :items="cwl_selector_items"
+                label="CSS Selector"
+                outlined
+                clearable
+                counter
+                dense
+                rows="1"
+              ></v-combobox>
+            </v-row>
+
+            <v-row class="justify-center align-center ma-3">
+              <v-switch
+                class = "ma-2"
+                dense
+                hide-details
+                v-model="cwl_is_capture"
+                label="Capture Site"
+              ></v-switch>
+
+              <v-btn 
+                tile color="primary"
+                elevation="1"
+                rounded
+                @click="getCrawl()">
+                <v-icon left>mdi-card-search-outline</v-icon>
+                <span>Site Crawl</span>
+              </v-btn>
+            </v-row>
+
+          </div>
+
+          <v-divider></v-divider>
+          <div class="text-h5 primary--text">Crawl Result</div>
+          <div class="ma-2">
+            <v-row class="justify-center align-center ma-3">
+              <v-col class="col-4">
+                <div>Capture Sample</div>
+                <div v-if="cwl_cap_url">
+                  <img :src="cwl_cap_url" alt="capture sample"
+                    style="max-width: 100%;">
+                </div>
+              </v-col>
+
+              <v-col class="col-8">
+                <v-textarea
+                  v-model="cwl_results_text"
+                  label="Crawl Result"
+                  style="white-space: pre-line;"
+                  outlined
+                  rows="10"
+                ></v-textarea>
+              </v-col>
+            </v-row>
+          </div>
+
+          <v-divider></v-divider>
+          <div class="text-h5 primary--text">Discovery Add Document</div>
+          <div class="ma-2">
+            <v-row class="justify-center align-center ma-3">
+              <v-select
+                class="wdt12"
+                label="Project"
+                outlined
+                dense
+                :items="dc_projects"
+                item-text="name"
+                item-value="project_id"
+                v-model="dc_project_selected"
+                return-object
+                hide-details
+              ></v-select>
+
+              <v-select
+                label="Collections"
+                outlined
+                dense
+                :items="dc_collections"
+                item-text="name"
+                item-value="collection_id"
+                v-model="dc_collections_selected"
+                return-object
+                hide-details
+              ></v-select>
+
+              <v-btn
+                v-if="cwl_results_text"
+                class="ml-1"
+                color="success"
+                elevation="1"
+                fab
+                small
+                @click="dc_addfile.dialog=true">
+                <v-icon>mdi-plus</v-icon>
+              </v-btn>
+            </v-row>
+
+            <v-row class="justify-center ma-3">
+              <v-col class="col-6">
+                <v-simple-table dense>
+                  <template v-slot:default>
+                    <thead>
+                      <tr>
+                        <th class="text-left">document_id</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in dc_listdocuments">
+                        <td @click="getDocument(item.document_id);">{{ item.document_id }}</td>
+                      </tr>
+                    </tbody>
+                  </template>
+                </v-simple-table>
+              </v-col>
+              <v-col>
+                <div>
+                  <v-row>
+                    <v-col class="col-3">created</v-col>
+                    <v-col class="col">{{ dc_document_detail.created }}</v-col>
+                  </v-row>
+                  <v-row>
+                    <v-col class="col-3">status</v-col>
+                    <v-col class="col">{{ dc_document_detail.status }}</v-col>
+                  </v-row>
+                  <v-row>
+                    <v-col class="col-3">filename</v-col>
+                    <v-col class="col">{{ dc_document_detail.filename }}</v-col>
+                  </v-row>
+                  <v-row>
+                    <v-col class="col-3">file_type</v-col>
+                    <v-col class="col">{{ dc_document_detail.file_type }}</v-col>
+                  </v-row>
+                </div>
+              </v-col>
+            </v-row>
+
+
+          </div>
+
+        </v-container>
+      </v-main>
+    </v-app>
+  </div>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    const LOCAL_URL = "./";
+
+    new Vue({
+      el: '#app',
+      vuetify: new Vuetify(),
+
+      data:() => ({
+        // components
+        toast:{
+          show: false,
+          timeout: 5000,
+          type: "primary",
+          text:""
+        },
+
+        // Crawl
+        cwl_urllists: JSON.stringify([
+          {'url':'https://www.ibm.com/docs/ja/watsonx-as-a-service?topic=overview-whats-new', 'selector':''},
+          {'url':'', 'selector':''}
+        ], null, 2),
+
+        cwl_url: "",
+        cwl_url_items:[
+          "https://www.ibm.com/docs/ja/watsonx-as-a-service?topic=overview-whats-new",
+          "https://news.yahoo.co.jp/"
+        ],
+
+        cwl_selector: "",
+        cwl_selector_items:[
+          "main p",
+          "body"
+        ],
+        cwl_is_capture: false,
+
+        cwl_cap_url: "",
+        cwl_results_text: "",
+
+        // Discovery API
+        dc_listdocuments:[],
+        dc_document_detail:{},
+
+        dc_addfile:{
+          dialog: false,
+          filetype: "text",
+          loading: false
+        },
+
+        dc_projects: [],
+        dc_project_selected: "",
+        dc_collections: [],
+        dc_collections_selected: "",
+
+        dc_tbl_loading: false,
+        dc_outputjsons: [],
+      }),
+
+      watch: {
+        dc_project_selected: function(pid) {
+          console.log("[dc_projects_selected] change", pid.project_id);
+          this.listCollections();
+        },
+
+        dc_collections_selected: function(cid) {
+          console.log("[dc_collections_selected] change", cid);
+          if (cid) this.listDocuments();
+        },
+      },
+
+      methods: {
+        // components
+        showToast(msg) {
+          this.toast.text = msg;
+          this.toast.show = true;
+        },
+
+        // Send Request
+        async callapi(method, api, params) {
+          console.log("[callapi]", api);
+
+          let res = await fetch(`${LOCAL_URL}api`, {
+            method: method,
+            // cache: "no-cache",
+            headers: {
+              "Content-Type": "application/json",
+              // 'Authorization': 'Basic ' + btoa('test' + ":" + 'test')
+            },
+            body: JSON.stringify({
+              "api":api,
+              "params":params
+            })
+          });
+          console.log("[callapi] end", res.status);
+          if (!res.ok) {
+            throw new Error(`status = ${res.status}, statusText = ${res.statusText}`);
+          } 
+          const jsondata = await res.json();
+          // console.log("jsondata : " + JSON.stringify(jsondata));
+          return jsondata;
+        },
+
+        // WD api
+        async listProjects(showtoast) {
+          console.log("[listProjects]");
+
+          let prm = {};
+
+          // clear
+          this.dc_projects = [];
+          this.dc_collections = [];
+
+          let ret = await this.callapi("POST", "listProjects", prm);
+          if (ret) {
+            this.dc_projects = ret.projects;
+            this.dc_project_selected = ret.projects[0]; // set first item
+            console.log(ret);
+            if (showtoast) this.showToast("プロジェクトの取得が完了しました");
+            return true;
+          } else {
+            if (showtoast) this.showToast("プロジェクトの取得が失敗しました");
+            return false;
+          }
+        },
+
+        async listCollections(showtoast) {
+          console.log("[listCollections]");
+
+          let prm = {
+            "projectId": this.dc_project_selected.project_id
+          };
+          console.log(prm);
+
+          // clear collections
+          this.dc_collections = [];
+          this.dc_collections_selected = "";
+
+          let ret = await this.callapi("POST", "listCollections", prm);
+          if (ret) {
+            this.dc_collections = ret.collections;
+            if (ret.collections[0]) {
+              this.dc_collections_selected = this.dc_collections[0];
+            }
+            
+            if (showtoast) this.showToast("コレクションの取得が完了しました");
+            return true;
+          } else {
+            if (showtoast) this.showToast("コレクションの取得が失敗しました");
+            return false;
+          }
+        },
+
+        async listDocuments() {
+          console.log("[listDocument]");
+
+          let prm = {
+            "projectId": this.dc_project_selected.project_id,
+            "collectionId": this.dc_collections_selected.collection_id,
+            "count": 10
+          };
+
+          // clear
+          this.dc_listdocuments = [];
+
+          let ret = await this.callapi("POST", "listDocuments", prm);
+          if (ret) {
+            console.log(ret);
+            this.dc_listdocuments = ret.documents;
+          }
+        },
+
+        async getDocument(docid) {
+          console.log("[getDocument]");
+
+          let prm = {
+            "projectId": this.dc_project_selected.project_id,
+            "collectionId": this.dc_collections_selected.collection_id,
+            "documentId": docid
+          };
+
+          // clear
+          this.dc_document_detail = {};
+
+          let ret = await this.callapi("POST", "getDocument", prm);
+          if (ret) {
+            console.log(ret);
+            this.dc_document_detail = ret;
+          }
+        },
+
+        createFileObject() {
+          console.log("[createFileObject]");
+          let textbody = this.cwl_results_text;
+
+          let mime = "text/plain";
+          let fileext = ".txt";
+
+          switch (this.dc_addfile.filetype) {
+            case "html":
+              mime = "text/html";
+              fileext = ".html";
+              break;
+            case "text":
+            default:
+              mime = "text/plain";
+              fileext = ".txt";
+              break;
+          }
+
+          let sitename = this.cwl_url.replace("http://","").replace("https://","").replaceAll("/","_");
+          console.log(sitename);
+
+          let blob = new Blob([textbody], {type:mime});
+          let fileObj = new File([blob], `${sitename}${fileext}`, {type: mime});
+
+          return fileObj;
+        },
+
+        async addDocument() {
+          console.log("[addDocument]");
+          let showtoast = true;
+
+          let fileObj = this.createFileObject();
+
+          let formData = new FormData();
+          // formData.append('tmpfile', this.dc_addfile.file);
+          formData.append('tmpfile', fileObj);
+
+          console.log("fetch start");
+          let ret = await fetch(`${LOCAL_URL}addDocument/${this.dc_project_selected.project_id}/${this.dc_collections_selected.collection_id}`, {
+            method: "POST",
+            headers: {
+              // 'Authorization': 'Basic ' + btoa('test' + ":" + 'test')
+            },
+            body: formData
+          });
+          console.log("fetch end", ret);
+
+          if (ret.ok) {
+            if (showtoast) this.showToast("ファイルのアップロードが完了しました");
+            this.dc_addfile.dialog = false;
+            this.listDocuments();
+            return true;
+          } else {
+            if (showtoast) this.showToast("ファイルのアップロードが失敗しました");
+            return false;
+          }
+        },
+
+        // Crawl api
+        async getCrawl() {
+          console.log("[getCrawl]", this.cwl_url);
+
+          // clear results.
+          this.cwl_cap_url = "";
+          this.cwl_results_text = "";
+
+          // send request
+          let res = await fetch(`${LOCAL_URL}crawl`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              "url": this.cwl_url,
+              "selector": this.cwl_selector,
+              "isCapture": this.cwl_is_capture
+            })
+          });
+          console.log("[callapi] end", res.status);
+          if (!res.ok) {
+            throw new Error(`status = ${res.status}, statusText = ${res.statusText}`);
+          }
+          const ret = await res.json();
+
+          // set response to screen
+          if (ret) {
+            console.log(ret);
+            this.cwl_cap_url = ret.capture_path;
+            this.cwl_results_text = ret.text;
+          } else {
+            console.error(ret);
+          }
+        },
+
+        // Result
+        setResultTable(json) {
+          // convert json to array for table.
+          console.log("[setResultTable]");
+          if (!json.results) return;
+          console.log(json);
+          let target = [];
+
+          let cnt = 1;
+          let len = json.results.length;
+          for (let i=0; i<len; i++) {
+
+            let item = json.results[i];
+            if (item && item.document_passages) {
+              // create folder path text.
+              if (item.metadata &&
+                  item.metadata.source) {
+                item.metadata.source.path_text = ""; // init new field.
+
+                if (item.metadata &&
+                    item.metadata.source &&
+                    item.metadata.source.path_collection &&
+                    item.metadata.source.path_collection.entries) {
+                    let folderpath = item.metadata.source.path_collection.entries;
+                    if (folderpath.length > 0) {
+                      if (folderpath[0].name !== "すべてのファイル") folderpath = folderpath.reverse();
+                        item.metadata.source.path_text = folderpath.map(item => item.name).join(" > ");
+                    }
+                }
+              }
+              
+              // set only use datas.
+              target.push({
+                "no": cnt,
+                "document_id": item.document_id,
+                "result_metadata": item.result_metadata,
+                "extracted_metadata":item.extracted_metadata,
+                "metadata": item.metadata,
+                "document_passages":item.document_passages,
+                "projectId": item.projectId,
+
+                // for customize 
+                "question": item.question,
+                "answer": item.answer
+              });
+              cnt++;
+            }
+          }
+          console.log(target);
+          this.dc_outputjsons = target;
+        },
+
+        // init
+        async init() {
+          // Set Default Combobox
+          this.cwl_url = this.cwl_url_items[0];
+          // this.cwl_selector = this.cwl_selector_items[0];
+
+          // Get Discovery Projects
+          let ret_prj = await this.listProjects();
+          console.log("[init] listProjects return:", ret_prj);
+        }
+      },
+      mounted() {
+        console.log("vue mounted.");
+        this.init();
+      }
+    })
+
+  </script>
+</body>
+
+</html>
